@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Filter, SlidersHorizontal, Plus, LayoutGrid, List, Calendar } from 'lucide-react';
 import { useStore } from '../../store/useStore';
@@ -18,6 +18,12 @@ export function BoardHeader() {
   const setBoardViewType = useStore((state) => state.setBoardViewType);
   const [title, setTitle] = useState(board?.title || '');
   
+  useEffect(() => {
+    if (board?.title) {
+      setTitle(board.title);
+    }
+  }, [board?.title]);
+
   const handleUpdateTitle = () => {
     if (boardId && title.trim()) {
       updateBoard(boardId, { title });
