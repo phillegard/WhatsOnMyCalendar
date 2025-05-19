@@ -37,7 +37,7 @@ export function Sidebar({ isCollapsed, toggleSidebar, isMobile = false }: Sideba
       const newBoardId = createBoard(currentWorkspaceId, newBoardName);
       setNewBoardName('');
       setShowNewBoard(false);
-      navigate(`/board/${newBoardId}`);
+      navigate(`/app/board/${newBoardId}`);
     }
   };
 
@@ -48,7 +48,7 @@ export function Sidebar({ isCollapsed, toggleSidebar, isMobile = false }: Sideba
     if (window.confirm('Are you sure you want to delete this board? This action cannot be undone.')) {
       deleteBoard(boardIdToDelete);
       if (boardId === boardIdToDelete) {
-        navigate('/');
+        navigate('/app');
       }
     }
   };
@@ -67,7 +67,7 @@ export function Sidebar({ isCollapsed, toggleSidebar, isMobile = false }: Sideba
         )}
         
         {isCollapsed && (
-          <Link to="/" className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white">
+          <Link to="/app" className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white">
             <Home size={18} />
           </Link>
         )}
@@ -90,7 +90,7 @@ export function Sidebar({ isCollapsed, toggleSidebar, isMobile = false }: Sideba
           <Link
             to="/app"
             className={`flex items-center rounded-md px-3 py-2 text-sm font-medium ${
-              location.pathname === '/' 
+              location.pathname === '/app' 
                 ? 'bg-primary-50 text-primary-700' 
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
