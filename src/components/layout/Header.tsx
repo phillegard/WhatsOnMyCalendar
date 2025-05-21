@@ -9,6 +9,7 @@ interface HeaderProps {
 
 export function Header({ toggleSidebar }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
@@ -50,6 +51,71 @@ export function Header({ toggleSidebar }: HeaderProps) {
 
         {/* Right section */}
         <div className="flex items-center space-x-2">
+          {/* Notifications */}
+          <div className="relative">
+            <button
+              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100"
+              onClick={() => setShowNotifications(!showNotifications)}
+              aria-label="Notifications"
+            >
+              <Bell size={20} />
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
+                3
+              </span>
+            </button>
+            
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50 animate-fade-in">
+                <div className="py-1">
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <p className="text-sm font-medium text-gray-900">Notifications</p>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    <a href="#" className="flex items-start px-4 py-3 hover:bg-gray-50 border-b border-gray-100">
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
+                          <span className="text-sm font-medium text-primary-700">T</span>
+                        </div>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-gray-900">Task "Complete project proposal" is due tomorrow</p>
+                        <p className="text-xs text-gray-500">2 hours ago</p>
+                      </div>
+                    </a>
+                    <a href="#" className="flex items-start px-4 py-3 hover:bg-gray-50 border-b border-gray-100">
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                          <span className="text-sm font-medium text-green-700">M</span>
+                        </div>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-gray-900">Meeting with Marketing team in 30 minutes</p>
+                        <p className="text-xs text-gray-500">1 hour ago</p>
+                      </div>
+                    </a>
+                    <a href="#" className="flex items-start px-4 py-3 hover:bg-gray-50">
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                          <span className="text-sm font-medium text-blue-700">J</span>
+                        </div>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-gray-900">John commented on your task</p>
+                        <p className="text-xs text-gray-500">3 hours ago</p>
+                      </div>
+                    </a>
+                  </div>
+                  <div className="border-t border-gray-100">
+                    <a href="#" className="block px-4 py-2 text-center text-sm text-gray-700 hover:bg-gray-100">
+                      View all notifications
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* User Menu */}
           <div className="relative">
             <button
               className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 hover:bg-primary-200"
