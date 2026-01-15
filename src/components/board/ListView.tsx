@@ -1,123 +1,93 @@
 import { useState } from 'react';
 import { MoreHorizontal, Plus, ChevronDown, ChevronUp, FolderPlus, X } from 'lucide-react';
-import { format } from 'date-fns';
 import { useStore } from '../../store/useStore';
 import { Board, Task, Status, Priority } from '../../types';
 import { TaskModal } from '../task/TaskModal';
 import { TaskGroup } from './TaskGroup';
+import { TaskCreationForm } from '../task/TaskCreationForm';
+import { getStatusStyle, getPriorityClass } from '../../utils/taskStyles';
+import { formatDate } from '../../utils/dateHelpers';
+import { useToast } from '../../hooks/useToast';
+import { useTaskActions } from '../../hooks/useTaskActions';
+import { useGroupActions } from '../../hooks/useGroupActions';
+import { useStatusConfig } from '../../hooks/useStatusConfig';
 
 interface ListViewProps {
   board: Board;
 }
 
 export function ListView({ board }: ListViewProps) {
-  console.log('ListView rendering with board:', board);
-  
+  const toast = useToast();
+  // Consolidated state: selectedTask doubles as modal open state (null = closed)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newGroupTitle, setNewGroupTitle] = useState('');
-  const [isAddingGroup, setIsAddingGroup] = useState(false);
+  // Consolidated state: null = not adding, string = adding with current title
+  const [newGroupTitle, setNewGroupTitle] = useState<string | null>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [newTask, setNewTask] = useState<{
-    title: string;
-    description: string;
-    status: Status;
-    priority: Priority;
-    assignees: string[];
-    dueDate: string;
-  }>({
-    title: '',
-    description: '',
-    status: 'todo',
-    priority: 'medium',
-    assignees: [],
-    dueDate: '',
-  });
-  
-  const workspace = useStore((state) => 
-    state.workspaces.find(ws => ws.boards.some(b => b.id === board.id))
-  );
-  const statuses = useStore((state) => state.statuses);
-  const statusConfigs = useStore((state) => state.statusConfigs);
-  const getStatusColor = useStore((state) => state.getStatusColor);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const updateTask = useStore((state) => state.updateTask);
-  const createTask = useStore((state) => state.createTask);
-  const deleteTask = useStore((state) => state.deleteTask);
-  const createGroup = useStore((state) => state.createGroup);
-  const updateGroup = useStore((state) => state.updateGroup);
-  const deleteGroup = useStore((state) => state.deleteGroup);
-  const moveTaskToGroup = useStore((state) => state.moveTaskToGroup);
-  const toggleGroupExpanded = useStore((state) => state.toggleGroupExpanded);
-  
+  const workspace = useStore((state) =>
+    state.workspaces.find((ws) => ws.boards.some((b) => b.id === board.id))
+  );
+
+  // Use custom hooks for cleaner store access
+  const { statuses, statusConfigs, getStatusColor } = useStatusConfig();
+  const { createTask, updateTask, deleteTask, moveTaskToGroup } = useTaskActions(board.id);
+  const { createGroup, updateGroup, deleteGroup, toggleGroupExpanded } = useGroupActions(board.id);
+
+  // Derived state
+  const isModalOpen = selectedTask !== null;
+  const isAddingGroup = newGroupTitle !== null;
+
   const handleOpenTask = (task: Task) => {
     setSelectedTask(task);
-    setIsModalOpen(true);
-  };
-  
-  const handleCreateTask = () => {
-    if (!newTask.title.trim()) return;
-    
-    const newTaskId = createTask(board.id, board.columns[0].id, {
-      ...newTask,
-      title: newTask.title.trim(),
-    });
-
-    // Only move task to group if one is selected
-    // If no group is selected, it will remain in ungroupedTaskIds
-    if (selectedGroupId) {
-      moveTaskToGroup(board.id, newTaskId, selectedGroupId);
-    }
-    
-    // Reset state
-    setNewTask({
-      title: '',
-      description: '',
-      status: 'todo',
-      priority: 'medium',
-      assignees: [],
-      dueDate: '',
-    });
-    setSelectedGroupId(null);
-    setIsCreatingTask(false);
   };
 
-  const resetTaskForm = () => {
-    setNewTask({
-      title: '',
-      description: '',
-      status: 'todo',
-      priority: 'medium',
-      assignees: [],
-      dueDate: '',
-    });
-    setSelectedGroupId(null);
-    setIsCreatingTask(false);
-  };
-  
-  const handleSaveTask = (task: Task) => {
-    updateTask(task.id, task);
-    setIsModalOpen(false);
+  const handleCloseModal = () => {
     setSelectedTask(null);
   };
-  
+
+  const handleCreateTask = (
+    formData: { title: string; description: string; status: Status; priority: Priority; assignees: string[]; dueDate: string },
+    groupId: string | null
+  ) => {
+    setIsSubmitting(true);
+    try {
+      const newTaskId = createTask(board.columns[0].id, {
+        ...formData,
+        title: formData.title.trim(),
+      });
+
+      if (groupId) {
+        moveTaskToGroup(newTaskId, groupId);
+      }
+
+      setIsCreatingTask(false);
+      toast.success('Task created successfully!');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveTask = (task: Task) => {
+    updateTask(task.id, task);
+    setSelectedTask(null);
+  };
+
   const handleDeleteTask = (taskId: string) => {
     deleteTask(taskId);
-    setIsModalOpen(false);
     setSelectedTask(null);
   };
 
   const handleCreateGroup = () => {
-    if (newGroupTitle.trim()) {
-      createGroup(board.id, newGroupTitle.trim());
-      setNewGroupTitle('');
-      setIsAddingGroup(false);
+    if (newGroupTitle?.trim()) {
+      createGroup(newGroupTitle.trim());
+      setNewGroupTitle(null);
+      toast.success('Group created successfully!');
     }
   };
 
   const handleTaskDrop = (taskId: string, groupId: string | null) => {
-    moveTaskToGroup(board.id, taskId, groupId);
+    moveTaskToGroup(taskId, groupId);
   };
 
   const renderTask = (task: Task) => (
@@ -127,9 +97,9 @@ export function ListView({ board }: ListViewProps) {
     >
       <div className="flex items-center space-x-4">
         <span className="font-medium text-gray-900">{task.title}</span>
-        <span 
+        <span
           className="px-2.5 py-0.5 text-xs font-medium rounded-full border"
-          style={getStatusClass(task.status)}
+          style={getStatusStyle(task.status, getStatusColor)}
         >
           {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
         </span>
@@ -139,29 +109,12 @@ export function ListView({ board }: ListViewProps) {
       </div>
       {task.dueDate && (
         <span className="text-sm text-gray-500">
-          Due: {format(new Date(task.dueDate), 'MMM d')}
+          Due: {formatDate(task.dueDate)}
         </span>
       )}
     </div>
   );
 
-  const getStatusClass = (status: Status) => {
-    const color = getStatusColor(status);
-    return {
-      backgroundColor: `${color}20`, // 20% opacity
-      color: color,
-      borderColor: color,
-    };
-  };
-
-  const getPriorityClass = (priority: Task['priority']) => {
-    switch (priority) {
-      case 'low': return 'bg-gray-100 text-gray-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'high': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
   
   return (
     <div className="space-y-4 p-4">
@@ -170,7 +123,7 @@ export function ListView({ board }: ListViewProps) {
         <div className="flex items-center space-x-2">
           <button
             className="btn btn-secondary"
-            onClick={() => setIsAddingGroup(true)}
+            onClick={() => setNewGroupTitle('')}
           >
             <FolderPlus size={16} className="mr-1" />
             New Group
@@ -187,144 +140,20 @@ export function ListView({ board }: ListViewProps) {
 
       {/* New Task Creation Dialog */}
       {isCreatingTask && (
-        <div className="mb-4 space-y-4 p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-gray-900">Create New Task</h3>
-            <button
-              className="text-gray-400 hover:text-gray-500"
-              onClick={resetTaskForm}
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {/* Title */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Title</label>
-              <input
-                type="text"
-                value={newTask.title}
-                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                placeholder="Enter task title..."
-                className="input w-full mt-1"
-                autoFocus
-              />
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
-              <textarea
-                value={newTask.description}
-                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                placeholder="Enter task description..."
-                className="input w-full mt-1 h-24 resize-none"
-              />
-            </div>
-
-            {/* Group Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Group</label>
-              <select
-                value={selectedGroupId || ''}
-                onChange={(e) => setSelectedGroupId(e.target.value || null)}
-                className="input w-full mt-1"
-              >
-                <option value="">No Group (Ungrouped)</option>
-                {board.groups.map(group => (
-                  <option key={group.id} value={group.id}>
-                    {group.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Status and Priority */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Status</label>
-                <select
-                  value={newTask.status}
-                  onChange={(e) => setNewTask({ ...newTask, status: e.target.value as Status })}
-                  className="input w-full mt-1"
-                >
-                  {statusConfigs.map((config) => (
-                    <option key={config.name} value={config.name}>
-                      {config.name.charAt(0).toUpperCase() + config.name.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Priority</label>
-                <select
-                  value={newTask.priority}
-                  onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as Priority })}
-                  className="input w-full mt-1"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Due Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Due Date</label>
-              <input
-                type="date"
-                value={newTask.dueDate}
-                onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                className="input w-full mt-1"
-              />
-            </div>
-
-            {/* Assignees */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Assignees</label>
-              <select
-                multiple
-                value={newTask.assignees}
-                onChange={(e) => {
-                  const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
-                  setNewTask({ ...newTask, assignees: selectedOptions });
-                }}
-                className="input w-full mt-1 h-24"
-              >
-                {workspace?.members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-2 pt-4 border-t">
-            <button
-              className="btn btn-secondary"
-              onClick={resetTaskForm}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleCreateTask}
-              disabled={!newTask.title.trim()}
-            >
-              Create Task
-            </button>
-          </div>
-        </div>
+        <TaskCreationForm
+          groups={board.groups}
+          members={workspace?.members || []}
+          onSubmit={handleCreateTask}
+          onCancel={() => setIsCreatingTask(false)}
+          isSubmitting={isSubmitting}
+        />
       )}
 
       {isAddingGroup && (
         <div className="mb-4 flex items-center space-x-2">
           <input
             type="text"
-            value={newGroupTitle}
+            value={newGroupTitle || ''}
             onChange={(e) => setNewGroupTitle(e.target.value)}
             placeholder="Enter group name..."
             className="input flex-1"
@@ -333,8 +162,7 @@ export function ListView({ board }: ListViewProps) {
               if (e.key === 'Enter') {
                 handleCreateGroup();
               } else if (e.key === 'Escape') {
-                setIsAddingGroup(false);
-                setNewGroupTitle('');
+                setNewGroupTitle(null);
               }
             }}
           />
@@ -346,10 +174,7 @@ export function ListView({ board }: ListViewProps) {
           </button>
           <button
             className="btn btn-secondary"
-            onClick={() => {
-              setIsAddingGroup(false);
-              setNewGroupTitle('');
-            }}
+            onClick={() => setNewGroupTitle(null)}
           >
             Cancel
           </button>
@@ -361,11 +186,11 @@ export function ListView({ board }: ListViewProps) {
         <TaskGroup
           key={group.id}
           group={group}
-          tasks={board.tasks.filter(task => group.taskIds.includes(task.id))}
-          onEditGroup={(updatedGroup) => updateGroup(board.id, group.id, updatedGroup)}
-          onDeleteGroup={(groupId) => deleteGroup(board.id, groupId)}
+          tasks={board.tasks.filter((task) => group.taskIds.includes(task.id))}
+          onEditGroup={(updatedGroup) => updateGroup(group.id, updatedGroup)}
+          onDeleteGroup={(groupId) => deleteGroup(groupId)}
           onTaskDrop={handleTaskDrop}
-          onToggleExpand={(groupId) => toggleGroupExpanded(board.id, groupId)}
+          onToggleExpand={(groupId) => toggleGroupExpanded(groupId)}
           renderTask={renderTask}
         />
       ))}
@@ -424,7 +249,7 @@ export function ListView({ board }: ListViewProps) {
           task={selectedTask}
           isOpen={isModalOpen}
           onClose={() => {
-            setIsModalOpen(false);
+            handleCloseModal();
             setSelectedTask(null);
           }}
           onSave={handleSaveTask}

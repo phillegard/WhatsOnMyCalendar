@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, MoreHorizontal, Plus, Edit2, Trash2 } from 'lucide-react';
 import { Group, Task } from '../../types';
-import { format } from 'date-fns';
+import { getCurrentTimestamp } from '../../utils/dateHelpers';
 
 interface TaskGroupProps {
   group: Group;
@@ -49,7 +49,7 @@ export function TaskGroup({
       onEditGroup({
         ...group,
         title: editedTitle.trim(),
-        updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss")
+        updatedAt: getCurrentTimestamp()
       });
       setIsEditing(false);
     }
@@ -117,10 +117,13 @@ export function TaskGroup({
               </button>
               <button
                 onClick={() => {
-                  onDeleteGroup(group.id);
                   setIsMenuOpen(false);
+                  if (window.confirm(`Are you sure you want to delete the group "${group.title}"? Tasks in this group will be moved to ungrouped.`)) {
+                    onDeleteGroup(group.id);
+                  }
                 }}
                 className="flex w-full items-center px-4 py-2 text-sm text-error-600 hover:bg-error-50"
+                aria-label={`Delete group ${group.title}`}
               >
                 <Trash2 size={14} className="mr-2" />
                 Delete Group

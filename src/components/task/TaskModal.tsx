@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
 import { X, Calendar, User, Clock, Trash2, Plus, Check, Square, ChevronDown, ChevronUp } from 'lucide-react';
+import { getCurrentTimestamp } from '../../utils/dateHelpers';
 import { Task, Status, Priority, Subtask } from '../../types';
 import { useStore } from '../../store/useStore';
+import { useToast } from '../../hooks/useToast';
+import { getPriorityClass, getStatusStyle } from '../../utils/taskStyles';
 
 interface TaskModalProps {
   task: Task;
@@ -13,18 +16,33 @@ interface TaskModalProps {
 }
 
 export function TaskModal({ task, isOpen, onClose, onSave, onDelete }: TaskModalProps) {
+  const toast = useToast();
   const [editedTask, setEditedTask] = useState<Task>(task);
   const [newSubtask, setNewSubtask] = useState('');
   const [expandedSubtaskId, setExpandedSubtaskId] = useState<string | null>(null);
   const statuses = useStore((state) => state.statuses);
   const getStatusColor = useStore((state) => state.getStatusColor);
   const statusConfigs = useStore((state) => state.statusConfigs);
-  
+
   useEffect(() => {
     setEditedTask(task);
   }, [task]);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isOpen, onClose]);
   
-  const handleChange = (key: keyof Task, value: any) => {
+  const handleChange = <K extends keyof Task>(key: K, value: Task[K]) => {
     setEditedTask((prev) => ({
       ...prev,
       [key]: value,
@@ -41,9 +59,9 @@ export function TaskModal({ task, isOpen, onClose, onSave, onDelete }: TaskModal
   
   const handleAddSubtask = () => {
     if (newSubtask.trim()) {
-      const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
+      const now = getCurrentTimestamp();
       const newSubtaskItem: Subtask = {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         title: newSubtask.trim(),
         completed: false,
         status: 'todo',
@@ -74,7 +92,7 @@ export function TaskModal({ task, isOpen, onClose, onSave, onDelete }: TaskModal
   const handleSubtaskChange = (subtaskId: string, key: keyof Subtask, value: any) => {
     handleChange('subtasks', editedTask.subtasks.map(st =>
       st.id === subtaskId
-        ? { ...st, [key]: value, updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss") }
+        ? { ...st, [key]: value, updatedAt: getCurrentTimestamp() }
         : st
     ));
   };
@@ -82,6 +100,7 @@ export function TaskModal({ task, isOpen, onClose, onSave, onDelete }: TaskModal
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(editedTask);
+    toast.success('Task updated successfully!');
   };
   
   if (!isOpen) return null;
@@ -96,15 +115,6 @@ export function TaskModal({ task, isOpen, onClose, onSave, onDelete }: TaskModal
       color: color,
       borderColor: color,
     };
-  };
-
-  const getPriorityClass = (priority: Priority) => {
-    switch (priority) {
-      case 'low': return 'bg-gray-100 text-gray-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'high': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
   };
   
   return (
@@ -350,7 +360,11 @@ export function TaskModal({ task, isOpen, onClose, onSave, onDelete }: TaskModal
             <button
               type="button"
               className="btn btn-danger"
-              onClick={() => onDelete(editedTask.id)}
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to delete "${editedTask.title}"? This action cannot be undone.`)) {
+                  onDelete(editedTask.id);
+                }
+              }}
             >
               <Trash2 size={16} className="mr-1" />
               Delete

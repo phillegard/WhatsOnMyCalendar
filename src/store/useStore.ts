@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import { format } from 'date-fns';
 import { Board, Column, Task, User, Workspace, ViewType, Group, Status, StatusConfig } from '../types';
+import { getCurrentTimestamp } from '../utils/dateHelpers';
+import { updateBoardInWorkspaces, updateAllBoards, findBoardWithWorkspace, findTaskWithBoard } from './storeHelpers';
+import { createDemoState, createDefaultColumns, demoUser, DEFAULT_STATUS_CONFIGS } from './demoData';
 
 interface State {
   workspaces: Workspace[];
@@ -59,152 +61,44 @@ interface Actions {
   getStatusColor: (status: string) => string;
 }
 
-const createDefaultColumns = (boardId: string): Column[] => [
-  {
-    id: uuidv4(),
-    title: 'Title',
-    type: 'text',
-    boardId,
-    order: 0,
+// Safe localStorage wrapper for Zustand persist
+const storage = {
+  getItem: (name: string): string | null => {
+    try {
+      return localStorage.getItem(name);
+    } catch (error) {
+      console.warn('localStorage getItem failed:', error);
+      return null;
+    }
   },
-  {
-    id: uuidv4(),
-    title: 'Status',
-    type: 'status',
-    boardId,
-    order: 1,
+  setItem: (name: string, value: string): void => {
+    try {
+      localStorage.setItem(name, value);
+    } catch (error) {
+      console.warn('localStorage setItem failed:', error);
+    }
   },
-  {
-    id: uuidv4(),
-    title: 'Priority',
-    type: 'priority',
-    boardId,
-    order: 2,
+  removeItem: (name: string): void => {
+    try {
+      localStorage.removeItem(name);
+    } catch (error) {
+      console.warn('localStorage removeItem failed:', error);
+    }
   },
-  {
-    id: uuidv4(),
-    title: 'Assignee',
-    type: 'person',
-    boardId,
-    order: 3,
-  },
-  {
-    id: uuidv4(),
-    title: 'Due Date',
-    type: 'date',
-    boardId,
-    order: 4,
-  },
-];
-
-// Demo data
-const demoUser: User = {
-  id: 'user-1',
-  name: 'Demo User',
-  email: 'demo@example.com',
-  avatar: 'https://i.pravatar.cc/150?img=1',
-  role: 'admin',
-};
-
-const DEFAULT_STATUSES: StatusConfig[] = [
-  { name: 'todo', color: '#4F46E5' },    // blue
-  { name: 'working', color: '#F59E0B' }, // yellow
-  { name: 'stuck', color: '#EF4444' },   // red
-  { name: 'done', color: '#10B981' },    // green
-];
-
-const createInitialState = (): State => {
-  const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
-  const workspaceId = uuidv4();
-  const boardId = uuidv4();
-  const columns = createDefaultColumns(boardId);
-  
-  const tasks: Task[] = [
-    {
-      id: uuidv4(),
-      title: 'Implement project dashboard',
-      description: 'Create the main dashboard with project statistics and recent activity',
-      status: 'working',
-      priority: 'high',
-      assignees: ['user-1'],
-      dueDate: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
-      createdAt: now,
-      updatedAt: now,
-      columnId: columns[0].id,
-      subtasks: [],
-    },
-    {
-      id: uuidv4(),
-      title: 'Design user interface',
-      description: 'Create wireframes and mockups for the application',
-      status: 'done',
-      priority: 'medium',
-      assignees: ['user-1'],
-      dueDate: format(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
-      createdAt: now,
-      updatedAt: now,
-      columnId: columns[0].id,
-      subtasks: [],
-    },
-    {
-      id: uuidv4(),
-      title: 'Implement authentication',
-      description: 'Add user login and registration functionality',
-      status: 'todo',
-      priority: 'high',
-      assignees: ['user-1'],
-      dueDate: format(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
-      createdAt: now,
-      updatedAt: now,
-      columnId: columns[0].id,
-      subtasks: [],
-    },
-  ];
-  
-  const board: Board = {
-    id: boardId,
-    title: 'Product Development',
-    description: 'Track the development of our product',
-    createdAt: now,
-    updatedAt: now,
-    columns,
-    tasks,
-    groups: [],
-    ungroupedTaskIds: tasks.map(t => t.id),
-    viewType: 'list',
-  };
-  
-  const workspace: Workspace = {
-    id: workspaceId,
-    name: 'My Workspace',
-    createdAt: now,
-    members: [demoUser],
-    boards: [board],
-  };
-  
-  return {
-    workspaces: [workspace],
-    currentWorkspaceId: workspaceId,
-    currentBoardId: boardId,
-    currentUser: demoUser,
-    boardViewType: 'list',
-    statuses: ['todo', 'working', 'stuck', 'done'],
-    statusConfigs: DEFAULT_STATUSES,
-  };
 };
 
 export const useStore = create<State & Actions>()(
   persist(
     (set, get) => {
       // Create initial state
-      const initialState = createInitialState();
+      const initialState = createDemoState();
       
       return {
         ...initialState,
         
         // Workspace actions
         createWorkspace: (name) => {
-          const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
+          const now = getCurrentTimestamp();
           const newWorkspace: Workspace = {
             id: uuidv4(),
             name,
@@ -240,7 +134,7 @@ export const useStore = create<State & Actions>()(
         
         // Board actions
         createBoard: (workspaceId, title, description) => {
-          const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
+          const now = getCurrentTimestamp();
           const newBoardId = uuidv4();
           const columns = createDefaultColumns(newBoardId);
           
@@ -271,11 +165,10 @@ export const useStore = create<State & Actions>()(
         
         updateBoard: (id, data) => {
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) => 
-                board.id === id ? { ...board, ...data, updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss") } : board
-              ),
+            workspaces: updateBoardInWorkspaces(state.workspaces, id, (board) => ({
+              ...board,
+              ...data,
+              updatedAt: getCurrentTimestamp(),
             })),
           }));
         },
@@ -296,11 +189,9 @@ export const useStore = create<State & Actions>()(
         
         setBoardViewType: (boardId, viewType) => {
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) => 
-                board.id === boardId ? { ...board, viewType } : board
-              ),
+            workspaces: updateBoardInWorkspaces(state.workspaces, boardId, (board) => ({
+              ...board,
+              viewType,
             })),
             boardViewType: viewType,
           }));
@@ -337,7 +228,7 @@ export const useStore = create<State & Actions>()(
                       ...ws,
                       boards: ws.boards.map((b) => 
                         b.id === boardId
-                          ? { ...b, columns: [...b.columns, newColumn], updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss") }
+                          ? { ...b, columns: [...b.columns, newColumn], updatedAt: getCurrentTimestamp() }
                           : b
                       ),
                     }
@@ -349,38 +240,32 @@ export const useStore = create<State & Actions>()(
         
         updateColumn: (id, data) => {
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) => ({
-                ...board,
-                columns: board.columns.map((column) => 
-                  column.id === id ? { ...column, ...data } : column
-                ),
-                updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss"),
-              })),
+            workspaces: updateAllBoards(state.workspaces, (board) => ({
+              ...board,
+              columns: board.columns.map((column) =>
+                column.id === id ? { ...column, ...data } : column
+              ),
+              updatedAt: getCurrentTimestamp(),
             })),
           }));
         },
-        
+
         deleteColumn: (id) => {
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) => ({
-                ...board,
-                columns: board.columns.filter((column) => column.id !== id),
-                tasks: board.tasks.filter((task) => task.columnId !== id),
-                updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss"),
-              })),
+            workspaces: updateAllBoards(state.workspaces, (board) => ({
+              ...board,
+              columns: board.columns.filter((column) => column.id !== id),
+              tasks: board.tasks.filter((task) => task.columnId !== id),
+              updatedAt: getCurrentTimestamp(),
             })),
           }));
         },
         
         // Task actions
         createTask: (boardId, columnId, taskData) => {
-          const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
+          const now = getCurrentTimestamp();
           const newTaskId = uuidv4();
-          
+
           const newTask: Task = {
             id: newTaskId,
             title: taskData.title || 'New Task',
@@ -394,56 +279,39 @@ export const useStore = create<State & Actions>()(
             columnId,
             subtasks: [],
           };
-          
+
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) => 
-                board.id === boardId
-                  ? { 
-                      ...board, 
-                      tasks: [...board.tasks, newTask],
-                      ungroupedTaskIds: [...(board.ungroupedTaskIds || []), newTaskId],
-                      updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss"),
-                    }
-                  : board
-              ),
+            workspaces: updateBoardInWorkspaces(state.workspaces, boardId, (board) => ({
+              ...board,
+              tasks: [...board.tasks, newTask],
+              ungroupedTaskIds: [...(board.ungroupedTaskIds || []), newTaskId],
+              updatedAt: now,
             })),
           }));
-          
+
           return newTaskId;
         },
-        
+
         updateTask: (id, data) => {
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) => ({
-                ...board,
-                tasks: board.tasks.map((task) => 
-                  task.id === id 
-                    ? { 
-                        ...task, 
-                        ...data, 
-                        updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss") 
-                      } 
-                    : task
-                ),
-                updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss"),
-              })),
+            workspaces: updateAllBoards(state.workspaces, (board) => ({
+              ...board,
+              tasks: board.tasks.map((task) =>
+                task.id === id
+                  ? { ...task, ...data, updatedAt: getCurrentTimestamp() }
+                  : task
+              ),
+              updatedAt: getCurrentTimestamp(),
             })),
           }));
         },
-        
+
         deleteTask: (id) => {
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) => ({
-                ...board,
-                tasks: board.tasks.filter((task) => task.id !== id),
-                updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss"),
-              })),
+            workspaces: updateAllBoards(state.workspaces, (board) => ({
+              ...board,
+              tasks: board.tasks.filter((task) => task.id !== id),
+              updatedAt: getCurrentTimestamp(),
             })),
           }));
         },
@@ -480,7 +348,7 @@ export const useStore = create<State & Actions>()(
                             ? { ...task, columnId: destinationColumnId }
                             : task
                         ),
-                        updatedAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss"),
+                        updatedAt: getCurrentTimestamp(),
                       }
                     : board
                 ),
@@ -522,7 +390,7 @@ export const useStore = create<State & Actions>()(
 
         // Group actions
         createGroup: (boardId, title) => {
-          const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
+          const now = getCurrentTimestamp();
           const newGroupId = uuidv4();
           
           const newGroup: Group = {
@@ -533,129 +401,92 @@ export const useStore = create<State & Actions>()(
             createdAt: now,
             updatedAt: now,
           };
-          
+
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) =>
-                board.id === boardId
-                  ? {
-                      ...board,
-                      groups: [...(board.groups || []), newGroup],
-                      updatedAt: now,
-                    }
-                  : board
-              ),
+            workspaces: updateBoardInWorkspaces(state.workspaces, boardId, (board) => ({
+              ...board,
+              groups: [...(board.groups || []), newGroup],
+              updatedAt: now,
             })),
           }));
-          
+
           return newGroupId;
         },
-        
+
         updateGroup: (boardId, groupId, data) => {
-          const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
-          
+          const now = getCurrentTimestamp();
+
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) =>
-                board.id === boardId
-                  ? {
-                      ...board,
-                      groups: board.groups.map((group) =>
-                        group.id === groupId
-                          ? { ...group, ...data, updatedAt: now }
-                          : group
-                      ),
-                      updatedAt: now,
-                    }
-                  : board
+            workspaces: updateBoardInWorkspaces(state.workspaces, boardId, (board) => ({
+              ...board,
+              groups: board.groups.map((group) =>
+                group.id === groupId ? { ...group, ...data, updatedAt: now } : group
               ),
+              updatedAt: now,
             })),
           }));
         },
-        
+
         deleteGroup: (boardId, groupId) => {
-          const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
-          
+          const now = getCurrentTimestamp();
+
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) =>
-                board.id === boardId
-                  ? {
-                      ...board,
-                      groups: board.groups.filter((group) => group.id !== groupId),
-                      ungroupedTaskIds: [
-                        ...(board.ungroupedTaskIds || []),
-                        ...board.groups.find((g) => g.id === groupId)?.taskIds || [],
-                      ],
-                      updatedAt: now,
-                    }
-                  : board
-              ),
+            workspaces: updateBoardInWorkspaces(state.workspaces, boardId, (board) => ({
+              ...board,
+              groups: board.groups.filter((group) => group.id !== groupId),
+              ungroupedTaskIds: [
+                ...(board.ungroupedTaskIds || []),
+                ...(board.groups.find((g) => g.id === groupId)?.taskIds || []),
+              ],
+              updatedAt: now,
             })),
           }));
         },
         
         moveTaskToGroup: (boardId, taskId, groupId) => {
-          const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
-          
+          const now = getCurrentTimestamp();
+
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) => {
-                if (board.id !== boardId) return board;
+            workspaces: updateBoardInWorkspaces(state.workspaces, boardId, (board) => {
+              // Remove task from current group or ungrouped list
+              const updatedGroups = board.groups.map((group) => ({
+                ...group,
+                taskIds: group.taskIds.filter((id) => id !== taskId),
+                updatedAt: group.taskIds.includes(taskId) ? now : group.updatedAt,
+              }));
 
-                // Remove task from current group or ungrouped list
-                const updatedGroups = board.groups.map((group) => ({
-                  ...group,
-                  taskIds: group.taskIds.filter((id) => id !== taskId),
-                  updatedAt: group.taskIds.includes(taskId) ? now : group.updatedAt,
-                }));
+              const updatedUngroupedTaskIds = (board.ungroupedTaskIds || []).filter(
+                (id) => id !== taskId
+              );
 
-                const updatedUngroupedTaskIds = (board.ungroupedTaskIds || []).filter(
-                  (id) => id !== taskId
-                );
+              // Add task to new group or ungrouped list
+              if (groupId) {
+                updatedGroups.forEach((group) => {
+                  if (group.id === groupId) {
+                    group.taskIds.push(taskId);
+                    group.updatedAt = now;
+                  }
+                });
+              } else {
+                updatedUngroupedTaskIds.push(taskId);
+              }
 
-                // Add task to new group or ungrouped list
-                if (groupId) {
-                  updatedGroups.forEach((group) => {
-                    if (group.id === groupId) {
-                      group.taskIds.push(taskId);
-                      group.updatedAt = now;
-                    }
-                  });
-                } else {
-                  updatedUngroupedTaskIds.push(taskId);
-                }
-
-                return {
-                  ...board,
-                  groups: updatedGroups,
-                  ungroupedTaskIds: updatedUngroupedTaskIds,
-                  updatedAt: now,
-                };
-              }),
-            })),
+              return {
+                ...board,
+                groups: updatedGroups,
+                ungroupedTaskIds: updatedUngroupedTaskIds,
+                updatedAt: now,
+              };
+            }),
           }));
         },
-        
+
         toggleGroupExpanded: (boardId, groupId) => {
           set((state) => ({
-            workspaces: state.workspaces.map((workspace) => ({
-              ...workspace,
-              boards: workspace.boards.map((board) =>
-                board.id === boardId
-                  ? {
-                      ...board,
-                      groups: board.groups.map((group) =>
-                        group.id === groupId
-                          ? { ...group, isExpanded: !group.isExpanded }
-                          : group
-                      ),
-                    }
-                  : board
+            workspaces: updateBoardInWorkspaces(state.workspaces, boardId, (board) => ({
+              ...board,
+              groups: board.groups.map((group) =>
+                group.id === groupId ? { ...group, isExpanded: !group.isExpanded } : group
               ),
             })),
           }));
@@ -718,6 +549,7 @@ export const useStore = create<State & Actions>()(
     {
       name: 'taskhub-storage',
       version: 1,
+      storage: storage,
     }
   )
 );

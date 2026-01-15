@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { MoreHorizontal, Plus, Calendar as CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
 import { useStore } from '../../store/useStore';
 import { Board, Task, Status } from '../../types';
 import { TaskModal } from '../task/TaskModal';
+import { getTaskPriorityClass } from '../../utils/taskStyles';
+import { formatDate } from '../../utils/dateHelpers';
+import { getStatusBackgroundClass } from '../../utils/colors';
 
 interface KanbanViewProps {
   board: Board;
@@ -12,16 +14,29 @@ interface KanbanViewProps {
 export function KanbanView({ board }: KanbanViewProps) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const updateTask = useStore((state) => state.updateTask);
   const createTask = useStore((state) => state.createTask);
   const deleteTask = useStore((state) => state.deleteTask);
   const statuses = useStore((state) => state.statuses);
-  
+
+  // Handle opening a task once it's been created and is available in the board
+  useEffect(() => {
+    if (pendingTaskId) {
+      const newTask = board.tasks.find(t => t.id === pendingTaskId);
+      if (newTask) {
+        setSelectedTask(newTask);
+        setIsModalOpen(true);
+        setPendingTaskId(null);
+      }
+    }
+  }, [pendingTaskId, board.tasks]);
+
   const handleOpenTask = (task: Task) => {
     setSelectedTask(task);
     setIsModalOpen(true);
   };
-  
+
   const handleCreateTask = (status: Status) => {
     const newTaskId = createTask(board.id, board.columns[0].id, {
       title: 'New Task',
@@ -30,12 +45,9 @@ export function KanbanView({ board }: KanbanViewProps) {
       priority: 'medium',
       assignees: [],
     });
-    
-    // Find the new task and open it
-    const newTask = board.tasks.find(t => t.id === newTaskId);
-    if (newTask) {
-      handleOpenTask(newTask);
-    }
+
+    // Set pending task ID - useEffect will handle opening it once it's in the board
+    setPendingTaskId(newTaskId);
   };
   
   const handleSaveTask = (task: Task) => {
@@ -50,35 +62,16 @@ export function KanbanView({ board }: KanbanViewProps) {
     setSelectedTask(null);
   };
   
-  const getTasksByStatus = (status: Status) => {
-    return board.tasks.filter(task => task.status === status);
-  };
-  
-  const getPriorityClass = (priority: Task['priority']) => {
-    switch (priority) {
-      case 'low': return 'task-priority-low';
-      case 'medium': return 'task-priority-medium';
-      case 'high': return 'task-priority-high';
-      default: return 'task-priority-medium';
-    }
-  };
-  
-  const getStatusColor = (status: Status) => {
-    switch (status) {
-      case 'todo': return 'bg-gray-100';
-      case 'working': return 'bg-warning-100';
-      case 'stuck': return 'bg-error-100';
-      case 'done': return 'bg-success-100';
-      default: return 'bg-gray-100';
-    }
-  };
-  
+  const getTasksByStatus = useMemo(() => {
+    return (status: Status) => board.tasks.filter(task => task.status === status);
+  }, [board.tasks]);
+
   return (
     <div className="flex h-[calc(100vh-16rem)] overflow-x-auto p-4">
       {statuses.map((status) => (
         <div 
           key={status} 
-          className={`mr-4 flex h-full w-72 flex-shrink-0 flex-col rounded-md ${getStatusColor(status)} p-2`}
+          className={`mr-4 flex h-full w-72 flex-shrink-0 flex-col rounded-md ${getStatusBackgroundClass(status)} p-2`}
         >
           <div className="mb-3 flex items-center justify-between">
             <h3 className="font-medium capitalize">{status}</h3>
@@ -91,7 +84,7 @@ export function KanbanView({ board }: KanbanViewProps) {
             {getTasksByStatus(status).map((task) => (
               <div
                 key={task.id}
-                className={`card cursor-pointer p-3 ${getPriorityClass(task.priority)}`}
+                className={`card cursor-pointer p-3 ${getTaskPriorityClass(task.priority)}`}
                 onClick={() => handleOpenTask(task)}
               >
                 <div className="flex items-start justify-between">
@@ -132,7 +125,7 @@ export function KanbanView({ board }: KanbanViewProps) {
                   {task.dueDate && (
                     <div className="flex items-center text-xs text-gray-500">
                       <CalendarIcon size={12} className="mr-1" />
-                      <span>{format(new Date(task.dueDate), 'MMM d')}</span>
+                      <span>{formatDate(task.dueDate)}</span>
                     </div>
                   )}
                 </div>
