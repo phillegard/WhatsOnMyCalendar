@@ -70,7 +70,14 @@
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - Cross-browser support */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

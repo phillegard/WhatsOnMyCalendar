@@ -1,28 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { Loader2 } from 'lucide-react';
 
-export function SignUp() {
+export function SignUp(): React.ReactElement {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+  const [localError, setLocalError] = useState('');
   const navigate = useNavigate();
-  const signUp = useAuthStore((state) => state.signUp);
+  const { signUp, loading, error, clearError } = useAuthStore();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    // Clear error when component unmounts
+    return () => clearError();
+  }, [clearError]);
+
+  async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
+    setLocalError('');
+    clearError();
+
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setLocalError('Passwords do not match');
       return;
     }
+
     try {
       await signUp(email, password);
       navigate('/login');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch {
+      // Error is handled by the auth store
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -81,16 +91,24 @@ export function SignUp() {
             </div>
           </div>
 
-          {error && (
-            <div className="text-red-500 text-sm text-center">{error}</div>
+          {(error || localError) && (
+            <div className="text-red-500 text-sm text-center">{error || localError}</div>
           )}
 
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Sign up
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin mr-2" size={16} />
+                  Creating account...
+                </>
+              ) : (
+                'Sign up'
+              )}
             </button>
           </div>
         </form>

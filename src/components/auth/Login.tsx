@@ -1,23 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { Loader2 } from 'lucide-react';
 
-export function Login() {
+export function Login(): React.ReactElement {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const navigate = useNavigate();
-  const signIn = useAuthStore((state) => state.signIn);
+  const { signIn, loading, error, clearError } = useAuthStore();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    // Clear error when component unmounts or when user starts typing
+    return () => clearError();
+  }, [clearError]);
+
+  async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
+    clearError();
     try {
       await signIn(email, password);
       navigate('/app');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch {
+      // Error is handled by the auth store
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -68,9 +74,17 @@ export function Login() {
           <div className="flex flex-col space-y-4">
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Sign in
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin mr-2" size={16} />
+                  Signing in...
+                </>
+              ) : (
+                'Sign in'
+              )}
             </button>
             
             <div className="text-center">

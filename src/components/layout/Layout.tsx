@@ -1,29 +1,20 @@
-import { useState, useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { useStore } from '../../store/useStore';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 
-export function Layout() {
+export function Layout(): React.ReactElement {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const navigate = useNavigate();
-  const workspaces = useStore((state) => state.workspaces);
-  const currentWorkspaceId = useStore((state) => state.currentWorkspaceId);
 
-  console.log('Layout rendering with:', {
-    workspaces,
-    currentWorkspaceId,
-    pathname: location.pathname
-  });
-
-  const toggleSidebar = () => {
+  function toggleSidebar(): void {
     setSidebarOpen(!sidebarOpen);
-  };
+  }
 
-  const toggleMobileSidebar = () => {
+  function toggleMobileSidebar(): void {
     setMobileSidebarOpen(!mobileSidebarOpen);
-  };
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -60,7 +51,9 @@ export function Layout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header toggleSidebar={toggleMobileSidebar} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

@@ -1,48 +1,56 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Filter, SlidersHorizontal, Plus, LayoutGrid, List, Calendar } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Filter, LayoutGrid, List, Calendar, LucideIcon } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { useBoardById } from '../../hooks/useBoardById';
 import { ViewType } from '../../types';
 
-export function BoardHeader() {
+interface ViewOption {
+  type: ViewType;
+  icon: LucideIcon;
+  label: string;
+}
+
+const VIEW_OPTIONS: ViewOption[] = [
+  { type: 'list', icon: List, label: 'List' },
+  { type: 'kanban', icon: LayoutGrid, label: 'Board' },
+  { type: 'calendar', icon: Calendar, label: 'Calendar' },
+];
+
+export function BoardHeader(): React.ReactElement | null {
   const [isEditing, setIsEditing] = useState(false);
   const { boardId } = useParams<{ boardId: string }>();
-  const navigate = useNavigate();
-  const board = useStore((state) => 
-    state.workspaces
-      .flatMap(ws => ws.boards)
-      .find(b => b.id === boardId)
-  );
+  const board = useBoardById(boardId);
   const updateBoard = useStore((state) => state.updateBoard);
-  const deleteBoard = useStore((state) => state.deleteBoard);
   const setBoardViewType = useStore((state) => state.setBoardViewType);
   const [title, setTitle] = useState(board?.title || '');
-  
+
   useEffect(() => {
     if (board?.title) {
       setTitle(board.title);
     }
   }, [board?.title]);
 
-  const handleUpdateTitle = () => {
+  function handleUpdateTitle(): void {
     if (boardId && title.trim()) {
       updateBoard(boardId, { title });
       setIsEditing(false);
     }
-  };
+  }
 
-  const handleDeleteBoard = () => {
-    if (boardId && window.confirm('Are you sure you want to delete this board? This action cannot be undone.')) {
-      deleteBoard(boardId);
-      navigate('/');
-    }
-  };
-  
-  const handleViewChange = (viewType: ViewType) => {
+  function handleViewChange(viewType: ViewType): void {
     if (boardId) {
       setBoardViewType(boardId, viewType);
     }
-  };
+  }
+
+  function getViewButtonClass(viewType: ViewType): string {
+    const baseClass = 'flex items-center rounded px-2 py-1 text-sm';
+    const isActive = board?.viewType === viewType;
+    return isActive
+      ? `${baseClass} bg-gray-100 text-gray-900`
+      : `${baseClass} text-gray-600 hover:text-gray-900`;
+  }
   
   if (!board) return null;
   
@@ -79,39 +87,16 @@ export function BoardHeader() {
         
         <div className="flex items-center space-x-2">
           <div className="flex items-center rounded-md bg-white border border-gray-300 p-1">
-            <button
-              className={`flex items-center rounded px-2 py-1 text-sm ${
-                board.viewType === 'list' 
-                  ? 'bg-gray-100 text-gray-900' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              onClick={() => handleViewChange('list')}
-            >
-              <List size={16} className="mr-1" />
-              <span className="hidden sm:inline">List</span>
-            </button>
-            <button
-              className={`flex items-center rounded px-2 py-1 text-sm ${
-                board.viewType === 'kanban' 
-                  ? 'bg-gray-100 text-gray-900' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              onClick={() => handleViewChange('kanban')}
-            >
-              <LayoutGrid size={16} className="mr-1" />
-              <span className="hidden sm:inline">Board</span>
-            </button>
-            <button
-              className={`flex items-center rounded px-2 py-1 text-sm ${
-                board.viewType === 'calendar' 
-                  ? 'bg-gray-100 text-gray-900' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              onClick={() => handleViewChange('calendar')}
-            >
-              <Calendar size={16} className="mr-1" />
-              <span className="hidden sm:inline">Calendar</span>
-            </button>
+            {VIEW_OPTIONS.map(({ type, icon: Icon, label }) => (
+              <button
+                key={type}
+                className={getViewButtonClass(type)}
+                onClick={() => handleViewChange(type)}
+              >
+                <Icon size={16} className="mr-1" />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
           </div>
           
           <button className="btn btn-secondary">
